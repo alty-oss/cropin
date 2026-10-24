@@ -22,6 +22,10 @@ FROM node:22-alpine
 
 RUN apk add --no-cache gifsicle imagemagick libwebp-tools
 
+LABEL org.opencontainers.image.title="Cropin" \
+      org.opencontainers.image.description="Ferramenta para recortar imagens e GIFs animados" \
+      org.opencontainers.image.source="https://github.com/coelhomarcus/cropin"
+
 WORKDIR /app
 
 # Backend production dependencies

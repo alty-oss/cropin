@@ -3,7 +3,7 @@
 <p align="center">
     <picture>
         <source media="(prefers-color-scheme: light)" srcset="https://crop.marcuscoelho.com/favicon.ico">
-        <img src="https://crop.marcuscoelho.com/favicon.ico" alt="OpenClaw" width="50">
+        <img src="https://crop.marcuscoelho.com/favicon.ico" alt="Cropin" width="50">
     </picture>
 </p>
 
@@ -15,15 +15,15 @@ Recorte com preview em tempo real, preservando animações de GIF.
 
 <p>
   <img
-    src="https://img.shields.io/github/stars/coelhomarcus/image-cropper?style=flat-square"
+    src="https://img.shields.io/github/stars/coelhomarcus/cropin?style=flat-square"
     alt="GitHub Stars"
   />
   <img
-    src="https://img.shields.io/github/last-commit/coelhomarcus/image-cropper?style=flat-square"
+    src="https://img.shields.io/github/last-commit/coelhomarcus/cropin?style=flat-square"
     alt="Last commit"
   />
   <img
-    src="https://img.shields.io/github/issues/coelhomarcus/image-cropper?style=flat-square"
+    src="https://img.shields.io/github/issues/coelhomarcus/cropin?style=flat-square"
     alt="Open issues"
   />
 </p>
@@ -54,7 +54,7 @@ Recorte com preview em tempo real, preservando animações de GIF.
 
 ```bash
 # Clone
-git clone https://github.com/coelhomarcus/image-cropper
+git clone https://github.com/coelhomarcus/cropin
 
 # Backend (requer gifsicle instalado)
 cd backend
@@ -70,8 +70,8 @@ npm run dev
 ## Deploy (Docker)
 
 ```bash
-docker build -t image-cropper .
-docker run -p 3002:3002 image-cropper
+docker build -t cropin .
+docker run -p 3002:3002 cropin
 ```
 
 O Express serve tanto a API (`/api/gif/*`) quanto o frontend estático em uma porta só.

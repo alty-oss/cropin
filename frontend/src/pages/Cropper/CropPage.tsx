@@ -32,6 +32,10 @@ import type {
 export function CropPage() {
   const navigate = useNavigate();
 
+  useEffect(() => {
+    document.title = "Cropin — Editor de imagens";
+  }, []);
+
   const [imageSrc, setImageSrc] = useState<string | undefined>();
   const [fileName, setFileName] = useState<string>("");
   const [fileType, setFileType] = useState<string>("image/jpeg");
