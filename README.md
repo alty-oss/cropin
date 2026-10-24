@@ -38,6 +38,7 @@ Recorte com preview em tempo real, preservando animações de GIF.
 - Recorte de **GIFs** animados preservando a animação
 - Preview em tempo real
 - Download do resultado
+- Uploads de imagens de até 50 MB
 
 ## Tech Stack
 
@@ -45,24 +46,16 @@ Recorte com preview em tempo real, preservando animações de GIF.
 | ---------- | ------------------------- |
 | Frontend   | React + Vite + TypeScript |
 | Styling    | Tailwind CSS              |
-| Backend    | Node.js + Express         |
-| GIF Engine | Gifsicle                  |
-| Runtime    | Node.js 22                |
-| Container  | Docker (multi-stage)      |
+| Processing | Canvas + ImageMagick WASM |
+| Runtime    | Node.js 22 (build only)   |
+| Container  | Docker + Nginx            |
 
 ## Quick Start
 
 ```bash
-# Clone
 git clone https://github.com/coelhomarcus/cropin
+cd cropin
 
-# Backend (requer gifsicle instalado)
-cd backend
-npm install
-npm run dev
-
-# Frontend (em outro terminal)
-cd frontend
 npm install
 npm run dev
 ```
@@ -74,4 +67,5 @@ docker build -t cropin .
 docker run -p 3002:3002 cropin
 ```
 
-O Express serve tanto a API (`/api/gif/*`) quanto o frontend estático em uma porta só.
+O Nginx serve o frontend estático na porta `3002` e redireciona as rotas do
+`BrowserRouter` para `index.html`, permitindo recarregar a tela de edição.

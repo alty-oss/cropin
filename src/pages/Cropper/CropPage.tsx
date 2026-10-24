@@ -5,10 +5,15 @@ import "react-image-crop/dist/ReactCrop.css";
 import { Upload } from "lucide-react";
 
 import { getCroppedImage, getExtensionForMime } from "@/utils/imageProcessor";
-import { cropGif, formatFileSize, isAnimatedWebP } from "@/utils/gifProcessor";
+import {
+  cropAnimatedImage,
+  formatFileSize,
+  isAnimatedWebP,
+} from "@/utils/gifProcessor";
 import { ASPECT_RATIOS } from "@/utils/constants";
 
 import {
+  getUploadValidationError,
   loadCropSession,
   saveCropSession,
   clearCropSession,
@@ -62,9 +67,29 @@ export function CropPage() {
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("original");
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const imgRef = useRef<HTMLImageElement>(null);
   const fileRef = useRef<File | null>(null);
+  const imageUrlRef = useRef<string | null>(null);
+
+  const setImageFromFile = useCallback((file: File) => {
+    if (imageUrlRef.current) {
+      URL.revokeObjectURL(imageUrlRef.current);
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    imageUrlRef.current = objectUrl;
+    setImageSrc(objectUrl);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (imageUrlRef.current) {
+        URL.revokeObjectURL(imageUrlRef.current);
+      }
+    };
+  }, []);
 
   // --- Scale helpers ---
 
@@ -86,42 +111,47 @@ export function CropPage() {
   // --- Session loading ---
 
   useEffect(() => {
-    const session = loadCropSession();
-    if (!session) {
-      navigate("/");
-      return;
-    }
+    let cancelled = false;
 
-    setImageSrc(session.image);
-    setFileName(session.fileName.replace(/\.[^/.]+$/, "") || "cropped");
-    setFileType(session.fileType);
-    setOriginalSize(session.fileSize);
+    const loadSession = async () => {
+      try {
+        const session = await loadCropSession();
+        if (cancelled) return;
 
-    if (session.fileType === "image/gif") {
-      setIsGif(true);
-      fetch(session.image)
-        .then((res) => res.blob())
-        .then((blob) => {
-          fileRef.current = new File([blob], session.fileName || "image.gif", {
-            type: "image/gif",
-          });
-        });
-    } else if (session.fileType === "image/webp") {
-      fetch(session.image)
-        .then((res) => res.blob())
-        .then(async (blob) => {
-          const file = new File([blob], session.fileName || "image.webp", {
-            type: "image/webp",
-          });
-          if (await isAnimatedWebP(file)) {
-            setIsGif(true);
-            fileRef.current = file;
-          }
-        });
-    } else {
-      setIsGif(false);
-    }
-  }, [navigate]);
+        if (!session) {
+          navigate("/");
+          return;
+        }
+
+        setImageFromFile(session.file);
+        setFileName(session.fileName.replace(/\.[^/.]+$/, "") || "cropped");
+        setFileType(session.fileType);
+        setOriginalSize(session.fileSize);
+        fileRef.current = null;
+
+        if (session.fileType === "image/gif") {
+          setIsGif(true);
+          fileRef.current = session.file;
+        } else if (session.fileType === "image/webp") {
+          const animated = await isAnimatedWebP(session.file);
+          if (cancelled) return;
+          setIsGif(animated);
+          fileRef.current = animated ? session.file : null;
+        } else {
+          setIsGif(false);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar a imagem:", error);
+        if (!cancelled) navigate("/");
+      }
+    };
+
+    void loadSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, setImageFromFile]);
 
   useEffect(() => {
     if (imgRef.current && imageSrc) {
@@ -323,7 +353,23 @@ export function CropPage() {
   // --- Image loading (drag-drop replace) ---
 
   const loadNewImage = useCallback(async (file: File) => {
-    if (!file.type.startsWith("image/")) return;
+    const validationError = getUploadValidationError(file);
+    if (validationError) {
+      setUploadError(validationError);
+      return;
+    }
+
+    setUploadError(null);
+
+    const animated = file.type === "image/gif" || await isAnimatedWebP(file);
+
+    try {
+      await saveCropSession(file);
+    } catch (error) {
+      console.error("Erro ao salvar a imagem:", error);
+      setUploadError("Não foi possível preparar a imagem. Tente novamente.");
+      return;
+    }
 
     setFileType(file.type);
     setOriginalSize(file.size);
@@ -337,7 +383,6 @@ export function CropPage() {
     setSkipFrames(1);
     setOutputFormat("original");
 
-    const animated = file.type === "image/gif" || await isAnimatedWebP(file);
     setIsGif(animated);
 
     if (animated) {
@@ -346,14 +391,8 @@ export function CropPage() {
       fileRef.current = null;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setImageSrc(dataUrl);
-      saveCropSession(dataUrl, file);
-    };
-    reader.readAsDataURL(file);
-  }, []);
+    setImageFromFile(file);
+  }, [setImageFromFile]);
 
   usePaste({ onFilePaste: loadNewImage });
 
@@ -383,9 +422,12 @@ export function CropPage() {
     setOutputFormat("original");
   };
 
-  const handleClearImage = () => {
-    clearCropSession();
-    navigate("/");
+  const handleClearImage = async () => {
+    try {
+      await clearCropSession();
+    } finally {
+      navigate("/");
+    }
   };
 
   // --- Processing ---
@@ -402,10 +444,16 @@ export function CropPage() {
       let result;
 
       if (isGif && fileRef.current && outputFormat === "original") {
-        result = await cropGif(imgRef.current, completedCrop, fileRef.current, {
+        result = await cropAnimatedImage(
+          imgRef.current,
+          completedCrop,
+          fileRef.current,
+          fileType,
+          {
           onProgress: (p) => setProcessingProgress(p),
           skipFrames: skipFrames,
-        });
+          },
+        );
       } else {
         result = await getCroppedImage(
           imgRef.current,
@@ -548,6 +596,15 @@ export function CropPage() {
               A imagem atual será substituída
             </p>
           </div>
+        </div>
+      )}
+
+      {uploadError && (
+        <div
+          className="absolute top-16 left-1/2 z-40 -translate-x-1/2 bg-red-500/90 px-4 py-2 text-center text-sm text-white"
+          role="alert"
+        >
+          {uploadError}
         </div>
       )}
     </div>

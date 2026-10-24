@@ -1,9 +1,13 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import { useNavigate } from "react-router";
 import { Crop as CropIcon } from "lucide-react";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { usePaste } from "@/hooks/usePaste";
-import { saveCropSession } from "@/utils/sessionStorage";
+import { preloadAnimatedProcessor } from "@/utils/gifProcessor";
+import {
+  getUploadValidationError,
+  saveCropSession,
+} from "@/utils/sessionStorage";
 import { Footer } from "./components/Footer";
 import { DragOverlay } from "./components/DragOverlay";
 import { UploadCard } from "./components/UploadCard";
@@ -12,16 +16,24 @@ import { FeatureGrid } from "./components/FeatureGrid";
 export function HomePage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const processFile = useCallback(
-    (file: File) => {
-      if (!file.type.startsWith("image/")) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        saveCropSession(reader.result as string, file);
+    async (file: File) => {
+      const validationError = getUploadValidationError(file);
+      if (validationError) {
+        setUploadError(validationError);
+        return;
+      }
+
+      try {
+        await saveCropSession(file);
+        setUploadError(null);
         navigate("/crop");
-      };
-      reader.readAsDataURL(file);
+      } catch (error) {
+        console.error("Erro ao salvar a imagem:", error);
+        setUploadError("Não foi possível preparar a imagem. Tente novamente.");
+      }
     },
     [navigate],
   );
@@ -30,6 +42,32 @@ export function HomePage() {
 
   useEffect(() => {
     document.title = "Cropin — Recorte de imagens";
+  }, []);
+
+  useEffect(() => {
+    type IdleWindow = Window & {
+      requestIdleCallback?: (callback: () => void) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    const idleWindow = window as IdleWindow;
+    if (idleWindow.requestIdleCallback) {
+      const id = idleWindow.requestIdleCallback(() => {
+        void preloadAnimatedProcessor().catch((error) => {
+          console.warn("Não foi possível pré-carregar o processador WASM:", error);
+        });
+      });
+
+      return () => idleWindow.cancelIdleCallback?.(id);
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void preloadAnimatedProcessor().catch((error) => {
+        console.warn("Não foi possível pré-carregar o processador WASM:", error);
+      });
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   const { isDragging, handlers } = useDragDrop({
@@ -94,6 +132,11 @@ export function HomePage() {
             fileInputRef={fileInputRef}
             onFileSelect={handleFileSelect}
           />
+          {uploadError && (
+            <p className="mt-3 text-center text-sm text-red-400" role="alert">
+              {uploadError}
+            </p>
+          )}
           <FeatureGrid />
         </div>
       </main>
